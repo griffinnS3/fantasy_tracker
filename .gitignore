@@ -1,0 +1,44 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# --- Virtual environments ---
+myenv/
+venv/
+env/
+.venv/
+ENV/
+
+# --- Distribution / packaging ---
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# --- Environment / secrets ---
+.env
+.env.*
+*.key
+
+# --- Project outputs ---
+adp_vs_fantasy_points.png
+*.png
+*.csv
+
+# --- Caches (nflreadpy / pandas / requests) ---
+.cache/
+*.cache
+.nflreadpy_cache/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

@@ -1,4 +1,5 @@
 """
+Griffin Smith
 12-Team Mock Draft Simulator
 -----------------------------
 Uses the same ADP + fantasy points dataset built in adp_vs_fantasy_points.py
@@ -35,7 +36,7 @@ NOISE_STD = 4.0            # ADP noise: bigger = more "reaches"/"falls" vs stric
 POINTS_NOISE_STD = 15.0    # fantasy-points noise: bigger = more deviation from strict points order
 RANDOM_SEED = None          # set an int (e.g. 42) for a reproducible draft
 
-AI_DRAFT_STRATEGY = "points"  # "points" = AI drafts by last season's fantasy points, "adp" = by ADP
+AI_DRAFT_STRATEGY = "ADP"  # "points" = AI drafts by last season's fantasy points, "adp" = by ADP
 
 HUMAN_TEAMS = {1}     # team numbers (1-NUM_TEAMS) controlled by a person; empty set = fully simulated
 NUM_SHOWN_CANDIDATES = 15  # how many top-available players to show a human drafter each pick
@@ -113,7 +114,24 @@ def human_pick(candidates: pd.DataFrame, team: int, overall_pick: int, rnd: int)
             print("No eligible player found matching that. Try again.")
 
 
-def simulate_draft(players: pd.DataFrame, num_teams: int = NUM_TEAMS, seed=None):
+def simulate_draft(
+    players: pd.DataFrame,
+    num_teams: int = NUM_TEAMS,
+    seed=None,
+    human_teams: set = None,
+    verbose: bool = True,
+):
+    """
+    Run one simulated draft.
+
+    human_teams: overrides the module-level HUMAN_TEAMS when provided (e.g. pass
+        set() for a fully-automated run, used by batch analysis scripts).
+    verbose: when False, suppresses the live pick-by-pick print output -- useful
+        when running many drafts back to back.
+    """
+    if human_teams is None:
+        human_teams = HUMAN_TEAMS
+
     rng = np.random.default_rng(seed)
     total_rounds = sum(ROSTER_SLOTS.values())
 
@@ -139,7 +157,7 @@ def simulate_draft(players: pd.DataFrame, num_teams: int = NUM_TEAMS, seed=None)
             if candidates.empty:
                 candidates = available  # fallback if the roster shape runs out of eligible players
 
-            if team in HUMAN_TEAMS:
+            if team in human_teams:
                 pick_idx = human_pick(candidates, team, overall_pick, rnd)
             elif AI_DRAFT_STRATEGY == "points":
                 noisy_value = candidates["fantasy_points"] + rng.normal(0, POINTS_NOISE_STD, size=len(candidates))
@@ -149,18 +167,20 @@ def simulate_draft(players: pd.DataFrame, num_teams: int = NUM_TEAMS, seed=None)
                 pick_idx = noisy_adp.idxmin()  # lower ADP is better
 
             player = available.loc[pick_idx]
-            rookie_tag = " (R)" if player.get("is_rookie") else ""
+            is_rookie = bool(player.get("is_rookie"))
+            rookie_tag = " (R)" if is_rookie else ""
 
             slot = assign_slot(player["position_stats"], teams[team]["slots_filled"])
             teams[team]["slots_filled"][slot] += 1
             teams[team]["roster"].append(
                 {
                     "slot": slot,
-                    "player": player["player_display_name"] + rookie_tag,
+                    "player": player["player_display_name"],
                     "position": player["position_stats"],
                     "adp": round(player["adp"], 1),
                     "points": round(player["fantasy_points"], 1),
-                    "is_rookie": bool(player.get("is_rookie")),
+                    "is_rookie": is_rookie,
+                    "overall_pick": overall_pick,
                 }
             )
 
@@ -169,15 +189,17 @@ def simulate_draft(players: pd.DataFrame, num_teams: int = NUM_TEAMS, seed=None)
                     "overall_pick": overall_pick,
                     "round": rnd,
                     "team": team,
-                    "player": player["player_display_name"] + rookie_tag,
+                    "player": player["player_display_name"],
                     "position": player["position_stats"],
                     "adp": round(player["adp"], 1),
+                    "points": round(player["fantasy_points"], 1),
+                    "is_rookie": is_rookie,
                 }
             )
 
             available = available.drop(pick_idx)
 
-            if team not in HUMAN_TEAMS:
+            if verbose and team not in human_teams:
                 print(
                     f"Pick {overall_pick:>3} (Rd {rnd:>2}) - Team {team:>2} drafts: "
                     f"{player['player_display_name']}{rookie_tag} ({player['position_stats']}, ADP {player['adp']:.1f})"
@@ -189,9 +211,10 @@ def simulate_draft(players: pd.DataFrame, num_teams: int = NUM_TEAMS, seed=None)
 def print_draft_board(draft_board):
     print("\n=== DRAFT BOARD ===")
     for pick in draft_board:
+        tag = " (R)" if pick.get("is_rookie") else ""
         print(
             f"Pick {pick['overall_pick']:>3} (Rd {pick['round']:>2}) "
-            f"- Team {pick['team']:>2}: {pick['player']} ({pick['position']}, ADP {pick['adp']})"
+            f"- Team {pick['team']:>2}: {pick['player']}{tag} ({pick['position']}, ADP {pick['adp']})"
         )
 
 
@@ -201,8 +224,9 @@ def print_team_rosters(teams):
         total_points = sum(p["points"] for p in data["roster"])
         print(f"\nTeam {team} — total points: {total_points:.1f}")
         for p in data["roster"]:
+            tag = " (R)" if p.get("is_rookie") else ""
             print(
-                f"  {p['slot']:<6} {p['player']:<28} {p['position']:<3} "
+                f"  {p['slot']:<6} {p['player'] + tag:<28} {p['position']:<3} "
                 f"ADP {p['adp']:<6} {p['points']} pts"
             )
 
